@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: mart_monthly_revenue
+    description: >
+      Monthly rollup of NYC Yellow Taxi trips. Incremental model — only
+      new/changed months are processed on each dbt run.
+    columns:
+      - name: month_start_date
+        description: "First day of the month (grain key)."
+        tests:
+          - not_null
+          - unique
+      - name: trip_year
+        description: "Calendar year extracted from month_start_date."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [2019, 2020, 2021, 2022, 2023, 2024]
+      - name: trip_month
+        description: "Calendar month (1–12)."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+      - name: total_trips
+        description: "Total trip count for the month."
+        tests:
+          - not_null
+      - name: total_revenue
+        description: "Sum of total_amount for the month."
+        tests:
+          - not_null
+
+  - name: mart_top_zones
+    description: >
+      Zone-level demand summary with borough ranking. Refreshed each pipeline run.
+    columns:
+      - name: pickup_location_id
+        description: "TLC taxi zone ID (primary key)."
+        tests:
+          - not_null
+          - unique
+      - name: pickup_borough
+        description: "NYC borough name."
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - Manhattan
+                - Brooklyn
+                - Queens
+                - Bronx
+                - Staten Island
+                - EWR
+                - Unknown
+      - name: total_trips
+        description: "Total pickup trips for this zone."
+        tests:
+          - not_null
+      - name: overall_rank
+        description: "Zone rank by trip volume across all boroughs."
+        tests:
+          - not_null

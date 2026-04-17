@@ -1,0 +1,104 @@
+{
+  "name": "nyc_taxi_pipeline",
+  "tasks": [
+    {
+      "task_key": "01_ingest",
+      "description": "Download NYC TLC Parquet files to DBFS and validate schema",
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-username>/DataEng-Projects-6/notebooks/01_ingest",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "nyc_taxi_cluster",
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "02_bronze",
+      "description": "Write Delta Lake bronze table partitioned by (year, month), record baseline benchmark",
+      "depends_on": [{ "task_key": "01_ingest" }],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-username>/DataEng-Projects-6/notebooks/02_bronze",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "nyc_taxi_cluster",
+      "timeout_seconds": 7200
+    },
+    {
+      "task_key": "03_silver",
+      "description": "Clean + transform to silver, broadcast join zones, Z-ORDER, record optimized benchmark",
+      "depends_on": [{ "task_key": "02_bronze" }],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-username>/DataEng-Projects-6/notebooks/03_silver",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "nyc_taxi_cluster",
+      "timeout_seconds": 7200
+    },
+    {
+      "task_key": "04_gold",
+      "description": "Build gold aggregations: daily trips, zone demand, peak hours",
+      "depends_on": [{ "task_key": "03_silver" }],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-username>/DataEng-Projects-6/notebooks/04_gold",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "nyc_taxi_cluster",
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "05_load_snowflake",
+      "description": "Write gold Delta tables to Snowflake via Spark connector",
+      "depends_on": [{ "task_key": "04_gold" }],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-username>/DataEng-Projects-6/notebooks/05_load_snowflake",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "nyc_taxi_cluster",
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "06_dbt_run",
+      "description": "Run dbt Cloud job: staging + incremental mart models + schema tests",
+      "depends_on": [{ "task_key": "05_load_snowflake" }],
+      "dbt_task": {
+        "project_directory": "/dbt",
+        "commands": [
+          "dbt deps",
+          "dbt run --select staging marts",
+          "dbt test"
+        ],
+        "schema": "GOLD"
+      },
+      "timeout_seconds": 1800
+    }
+  ],
+  "job_clusters": [
+    {
+      "job_cluster_key": "nyc_taxi_cluster",
+      "new_cluster": {
+        "spark_version": "13.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 2,
+        "spark_conf": {
+          "spark.databricks.delta.preview.enabled": "true",
+          "spark.sql.shuffle.partitions": "200"
+        },
+        "libraries": [
+          {
+            "maven": {
+              "coordinates": "net.snowflake:spark-snowflake_2.12:2.12.0-spark_3.3"
+            }
+          },
+          {
+            "maven": {
+              "coordinates": "net.snowflake:snowflake-jdbc:3.13.30"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "email_notifications": {},
+  "timeout_seconds": 28800,
+  "max_concurrent_runs": 1,
+  "format": "MULTI_TASK"
+}

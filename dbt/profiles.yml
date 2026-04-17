@@ -1,0 +1,21 @@
+# profiles.yml — place this in ~/.dbt/ on your local machine
+# or configure via dbt Cloud UI (preferred for dbt Cloud)
+#
+# In dbt Cloud: Project Settings → Connection → Snowflake
+# Fill in account, database, warehouse, role, and user/password there.
+# This file is for reference / local dbt CLI use only.
+
+nyc_taxi:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: SYSADMIN
+      database: NYC_TAXI
+      warehouse: COMPUTE_WH
+      schema: GOLD
+      threads: 4
+      client_session_keep_alive: false

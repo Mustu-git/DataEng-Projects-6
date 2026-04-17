@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: gold_raw
+    database: NYC_TAXI
+    schema: GOLD
+    description: "Raw gold tables written by the PySpark pipeline on Databricks."
+    tables:
+      - name: GOLD_DAILY_TRIPS
+        description: "Daily trip aggregations by calendar date."
+      - name: GOLD_ZONE_DEMAND
+        description: "Pickup zone demand aggregations across all years."
+      - name: GOLD_PEAK_HOURS
+        description: "Hourly trip patterns split by weekday / weekend."
