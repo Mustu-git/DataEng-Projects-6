@@ -12,8 +12,10 @@
 
 # COMMAND ----------
 
-VOL_RAW      = "/Volumes/main/nyc_taxi/nyc_taxi_vol/raw"
-BRONZE_TABLE = "main.nyc_taxi.bronze"
+CATALOG      = spark.sql("SELECT current_catalog()").collect()[0][0]
+VOL_RAW      = f"/Volumes/{CATALOG}/nyc_taxi/nyc_taxi_vol/raw"
+BRONZE_TABLE = f"{CATALOG}.nyc_taxi.bronze"
+print(f"CATALOG={CATALOG}  BRONZE_TABLE={BRONZE_TABLE}")
 
 # COMMAND ----------
 

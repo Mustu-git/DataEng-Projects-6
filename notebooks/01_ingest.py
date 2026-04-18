@@ -1,24 +1,28 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Step 1 — Ingest NYC TLC Yellow Taxi Parquet Files (2019–2024)
-# MAGIC
-# MAGIC Downloads all Yellow Taxi Parquet files from the NYC TLC S3 bucket into a
-# MAGIC Unity Catalog Volume, then reads them into a single Spark DataFrame with an
-# MAGIC **explicit schema** (never inferred — protects against schema drift across years).
 
 # COMMAND ----------
 
-# MAGIC %md ## 1.0 — One-time setup: create UC schema + volume
-# MAGIC
-# MAGIC Run this cell once. It creates:
-# MAGIC - Schema `main.nyc_taxi`
-# MAGIC - Volume `main.nyc_taxi.nyc_taxi_vol` (managed volume for raw files)
+# MAGIC %md ## 1.0 — Detect catalog and create schema + volume
 
 # COMMAND ----------
 
-spark.sql("CREATE SCHEMA IF NOT EXISTS main.nyc_taxi")
-spark.sql("CREATE VOLUME IF NOT EXISTS main.nyc_taxi.nyc_taxi_vol")
-print("Schema and volume ready.")
+# Detect the actual current catalog (differs by workspace)
+CATALOG = spark.sql("SELECT current_catalog()").collect()[0][0]
+print(f"Current catalog: {CATALOG}")
+
+spark.sql("SHOW CATALOGS").show()
+
+# COMMAND ----------
+
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.nyc_taxi")
+print(f"Schema {CATALOG}.nyc_taxi ready.")
+
+# Create a managed volume for raw file storage
+spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.nyc_taxi.nyc_taxi_vol")
+VOL_BASE = f"/Volumes/{CATALOG}/nyc_taxi/nyc_taxi_vol"
+print(f"Volume path: {VOL_BASE}")
 
 # COMMAND ----------
 
@@ -26,12 +30,13 @@ print("Schema and volume ready.")
 
 # COMMAND ----------
 
-BASE_URL  = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-VOL_RAW   = "/Volumes/main/nyc_taxi/nyc_taxi_vol/raw"
-YEARS     = list(range(2019, 2025))   # 2019 – 2024 inclusive
-MONTHS    = list(range(1, 13))
-
 import os
+
+BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
+VOL_RAW  = f"{VOL_BASE}/raw"
+YEARS    = list(range(2019, 2025))
+MONTHS   = list(range(1, 13))
+
 os.makedirs(VOL_RAW, exist_ok=True)
 print(f"Raw files destination: {VOL_RAW}")
 
@@ -48,19 +53,16 @@ for year in YEARS:
         filename = f"yellow_tripdata_{year}-{month:02d}.parquet"
         dst_path = f"{VOL_RAW}/{filename}"
 
-        # Skip if already downloaded
-        if os.path.exists(dst_path):
+        if os.path.exists(dst_path) and os.path.getsize(dst_path) > 1000:
             print(f"  [SKIP] {filename}")
             continue
 
         url = f"{BASE_URL}/{filename}"
         print(f"  [GET ] {url}")
-        result = subprocess.run(
-            ["wget", "-q", "-O", dst_path, url],
-            capture_output=True, text=True
-        )
-        if result.returncode != 0 or os.path.getsize(dst_path) < 1000:
-            print(f"  [WARN] {filename} not found or empty, removing")
+        result = subprocess.run(["wget", "-q", "-O", dst_path, url],
+                                capture_output=True, text=True)
+        if result.returncode != 0 or not os.path.exists(dst_path) or os.path.getsize(dst_path) < 1000:
+            print(f"  [WARN] {filename} not found or empty, skipping")
             if os.path.exists(dst_path):
                 os.remove(dst_path)
             continue
@@ -72,7 +74,7 @@ print("\nAll available files downloaded.")
 
 # COMMAND ----------
 
-# MAGIC %md ## 1.3 — Explicit schema (never infer!)
+# MAGIC %md ## 1.3 — Explicit schema
 
 # COMMAND ----------
 
@@ -105,24 +107,15 @@ YELLOW_SCHEMA = StructType([
 
 # COMMAND ----------
 
-# MAGIC %md ## 1.4 — Read all files into a single DataFrame
+# MAGIC %md ## 1.4 — Read all files
 
 # COMMAND ----------
 
-raw_df = (
-    spark.read
-         .schema(YELLOW_SCHEMA)
-         .parquet(VOL_RAW)
-)
+raw_df = spark.read.schema(YELLOW_SCHEMA).parquet(VOL_RAW)
 
 row_count = raw_df.count()
 print(f"Total rows ingested : {row_count:,}")
-print(f"Schema              : {len(raw_df.columns)} columns")
 raw_df.printSchema()
-
-# COMMAND ----------
-
-# MAGIC %md ## 1.5 — Quick sanity check by year
 
 # COMMAND ----------
 
@@ -130,10 +123,12 @@ from pyspark.sql.functions import year as spark_year, count
 
 raw_df.groupBy(spark_year("tpep_pickup_datetime").alias("year")) \
       .agg(count("*").alias("row_count")) \
-      .orderBy("year") \
-      .show()
+      .orderBy("year").show()
 
 # COMMAND ----------
 
+# Save catalog/vol path for downstream notebooks
+spark.conf.set("nyc_taxi.catalog", CATALOG)
+spark.conf.set("nyc_taxi.vol_base", VOL_BASE)
 raw_df.createOrReplaceTempView("raw_yellow_taxi")
-print("TempView 'raw_yellow_taxi' registered.")
+print(f"Done. CATALOG={CATALOG}  VOL_BASE={VOL_BASE}")

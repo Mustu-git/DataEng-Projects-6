@@ -14,10 +14,12 @@
 
 # COMMAND ----------
 
-BRONZE_TABLE = "main.nyc_taxi.bronze"
-SILVER_TABLE = "main.nyc_taxi.silver"
+CATALOG      = spark.sql("SELECT current_catalog()").collect()[0][0]
+BRONZE_TABLE = f"{CATALOG}.nyc_taxi.bronze"
+SILVER_TABLE = f"{CATALOG}.nyc_taxi.silver"
 ZONES_URL    = "https://d37ci6vzurychx.cloudfront.net/misc/taxi+_zone_lookup.csv"
-ZONES_LOCAL  = "/Volumes/main/nyc_taxi/nyc_taxi_vol/taxi_zone_lookup.csv"
+ZONES_LOCAL  = f"/Volumes/{CATALOG}/nyc_taxi/nyc_taxi_vol/taxi_zone_lookup.csv"
+print(f"CATALOG={CATALOG}")
 
 # COMMAND ----------
 

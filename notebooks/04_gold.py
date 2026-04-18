@@ -9,7 +9,9 @@
 
 # COMMAND ----------
 
-SILVER_TABLE = "main.nyc_taxi.silver"
+CATALOG      = spark.sql("SELECT current_catalog()").collect()[0][0]
+SILVER_TABLE = f"{CATALOG}.nyc_taxi.silver"
+print(f"CATALOG={CATALOG}")
 
 # COMMAND ----------
 
@@ -43,7 +45,7 @@ daily_trips_df = (
 )
 
 daily_trips_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
-              .saveAsTable("main.nyc_taxi.gold_daily_trips")
+              .saveAsTable(f"{CATALOG}.nyc_taxi.gold_daily_trips")
 
 print(f"gold_daily_trips: {daily_trips_df.count():,} rows")
 daily_trips_df.show(5)
@@ -67,7 +69,7 @@ zone_demand_df = (
 )
 
 zone_demand_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
-              .saveAsTable("main.nyc_taxi.gold_zone_demand")
+              .saveAsTable(f"{CATALOG}.nyc_taxi.gold_zone_demand")
 
 print(f"gold_zone_demand: {zone_demand_df.count():,} zones")
 zone_demand_df.show(10)
@@ -95,7 +97,7 @@ peak_hours_df = (
 )
 
 peak_hours_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
-             .saveAsTable("main.nyc_taxi.gold_peak_hours")
+             .saveAsTable(f"{CATALOG}.nyc_taxi.gold_peak_hours")
 
 print(f"gold_peak_hours: {peak_hours_df.count():,} rows")
 peak_hours_df.show(24)
@@ -106,6 +108,6 @@ peak_hours_df.show(24)
 
 # COMMAND ----------
 
-for tbl in ["main.nyc_taxi.gold_daily_trips", "main.nyc_taxi.gold_zone_demand", "main.nyc_taxi.gold_peak_hours"]:
+for tbl in [f"{CATALOG}.nyc_taxi.gold_daily_trips", f"{CATALOG}.nyc_taxi.gold_zone_demand", f"{CATALOG}.nyc_taxi.gold_peak_hours"]:
     cnt = spark.table(tbl).count()
     print(f"{tbl:45s} : {cnt:,} rows")
