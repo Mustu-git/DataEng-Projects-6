@@ -93,9 +93,9 @@ def spark_to_snowflake(spark_table: str, sf_table: str):
 # COMMAND ----------
 
 GOLD_TABLES = [
-    ("gold_daily_trips", "GOLD_DAILY_TRIPS"),
-    ("gold_zone_demand", "GOLD_ZONE_DEMAND"),
-    ("gold_peak_hours",  "GOLD_PEAK_HOURS"),
+    ("main.nyc_taxi.gold_daily_trips", "GOLD_DAILY_TRIPS"),
+    ("main.nyc_taxi.gold_zone_demand", "GOLD_ZONE_DEMAND"),
+    ("main.nyc_taxi.gold_peak_hours",  "GOLD_PEAK_HOURS"),
 ]
 
 for spark_table, sf_table in GOLD_TABLES:

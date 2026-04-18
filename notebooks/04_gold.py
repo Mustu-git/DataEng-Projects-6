@@ -2,23 +2,14 @@
 # MAGIC %md
 # MAGIC # Step 4 — Gold Aggregations
 # MAGIC
-# MAGIC Three gold tables written to Delta Lake:
-# MAGIC - `gold_daily_trips`  — trips, revenue, avg fare by calendar day
-# MAGIC - `gold_zone_demand`  — top pickup zones by volume across all years
-# MAGIC - `gold_peak_hours`   — hourly trip patterns (hour of day × weekday/weekend)
+# MAGIC Three gold tables written to Unity Catalog:
+# MAGIC - `main.nyc_taxi.gold_daily_trips`  — trips, revenue, avg fare by day
+# MAGIC - `main.nyc_taxi.gold_zone_demand`  — top zones by volume across all years
+# MAGIC - `main.nyc_taxi.gold_peak_hours`   — hourly patterns (weekday vs weekend)
 
 # COMMAND ----------
 
-# MAGIC %md ## 4.1 — Config
-
-# COMMAND ----------
-
-SILVER_TABLE = "nyc_taxi_silver"
-GOLD_BASE    = "dbfs:/nyc_taxi/delta/gold"
-
-# COMMAND ----------
-
-# MAGIC %md ## 4.2 — Load Silver
+SILVER_TABLE = "main.nyc_taxi.silver"
 
 # COMMAND ----------
 
@@ -28,7 +19,7 @@ print(f"Silver rows: {silver_df.count():,}")
 
 # COMMAND ----------
 
-# MAGIC %md ## 4.3 — gold_daily_trips
+# MAGIC %md ## 4.1 — gold_daily_trips
 
 # COMMAND ----------
 
@@ -51,26 +42,15 @@ daily_trips_df = (
     .orderBy("trip_date")
 )
 
-(
-    daily_trips_df.write
-                  .format("delta")
-                  .mode("overwrite")
-                  .option("overwriteSchema", "true")
-                  .save(f"{GOLD_BASE}/gold_daily_trips")
-)
-
-spark.sql("DROP TABLE IF EXISTS gold_daily_trips")
-spark.sql(f"""
-    CREATE TABLE gold_daily_trips
-    USING DELTA LOCATION '{GOLD_BASE}/gold_daily_trips'
-""")
+daily_trips_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
+              .saveAsTable("main.nyc_taxi.gold_daily_trips")
 
 print(f"gold_daily_trips: {daily_trips_df.count():,} rows")
 daily_trips_df.show(5)
 
 # COMMAND ----------
 
-# MAGIC %md ## 4.4 — gold_zone_demand
+# MAGIC %md ## 4.2 — gold_zone_demand
 
 # COMMAND ----------
 
@@ -86,26 +66,15 @@ zone_demand_df = (
     .orderBy(col("total_trips").desc())
 )
 
-(
-    zone_demand_df.write
-                  .format("delta")
-                  .mode("overwrite")
-                  .option("overwriteSchema", "true")
-                  .save(f"{GOLD_BASE}/gold_zone_demand")
-)
-
-spark.sql("DROP TABLE IF EXISTS gold_zone_demand")
-spark.sql(f"""
-    CREATE TABLE gold_zone_demand
-    USING DELTA LOCATION '{GOLD_BASE}/gold_zone_demand'
-""")
+zone_demand_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
+              .saveAsTable("main.nyc_taxi.gold_zone_demand")
 
 print(f"gold_zone_demand: {zone_demand_df.count():,} zones")
 zone_demand_df.show(10)
 
 # COMMAND ----------
 
-# MAGIC %md ## 4.5 — gold_peak_hours
+# MAGIC %md ## 4.3 — gold_peak_hours
 
 # COMMAND ----------
 
@@ -125,29 +94,18 @@ peak_hours_df = (
     .orderBy("day_type", "pickup_hour")
 )
 
-(
-    peak_hours_df.write
-                 .format("delta")
-                 .mode("overwrite")
-                 .option("overwriteSchema", "true")
-                 .save(f"{GOLD_BASE}/gold_peak_hours")
-)
-
-spark.sql("DROP TABLE IF EXISTS gold_peak_hours")
-spark.sql(f"""
-    CREATE TABLE gold_peak_hours
-    USING DELTA LOCATION '{GOLD_BASE}/gold_peak_hours'
-""")
+peak_hours_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true") \
+             .saveAsTable("main.nyc_taxi.gold_peak_hours")
 
 print(f"gold_peak_hours: {peak_hours_df.count():,} rows")
 peak_hours_df.show(24)
 
 # COMMAND ----------
 
-# MAGIC %md ## 4.6 — Verify all three gold tables
+# MAGIC %md ## 4.4 — Verify all gold tables
 
 # COMMAND ----------
 
-for tbl in ["gold_daily_trips", "gold_zone_demand", "gold_peak_hours"]:
+for tbl in ["main.nyc_taxi.gold_daily_trips", "main.nyc_taxi.gold_zone_demand", "main.nyc_taxi.gold_peak_hours"]:
     cnt = spark.table(tbl).count()
-    print(f"{tbl:30s} : {cnt:,} rows")
+    print(f"{tbl:45s} : {cnt:,} rows")

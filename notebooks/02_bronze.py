@@ -2,9 +2,9 @@
 # MAGIC %md
 # MAGIC # Step 2 — Delta Lake Bronze Layer
 # MAGIC
-# MAGIC Writes raw data to a partitioned Delta table and benchmarks a zone-level
-# MAGIC aggregation **before** any optimization (Z-ORDER / caching).
-# MAGIC Record the benchmark result in `docs/benchmarks.md`.
+# MAGIC Writes raw data to a Unity Catalog managed Delta table partitioned by
+# MAGIC (year, month), then benchmarks a zone-level aggregation **before** any
+# MAGIC optimization. Record the result in `docs/benchmarks.md`.
 
 # COMMAND ----------
 
@@ -12,12 +12,12 @@
 
 # COMMAND ----------
 
-BRONZE_PATH = "dbfs:/nyc_taxi/delta/bronze"
-BRONZE_TABLE = "nyc_taxi_bronze"
+VOL_RAW      = "/Volumes/main/nyc_taxi/nyc_taxi_vol/raw"
+BRONZE_TABLE = "main.nyc_taxi.bronze"
 
 # COMMAND ----------
 
-# MAGIC %md ## 2.2 — Load raw data (from notebook 01 or direct read)
+# MAGIC %md ## 2.2 — Load raw Parquet files
 
 # COMMAND ----------
 
@@ -48,8 +48,8 @@ YELLOW_SCHEMA = StructType([
     StructField("airport_fee",             DoubleType(),    True),
 ])
 
-raw_df = spark.read.schema(YELLOW_SCHEMA).parquet("dbfs:/nyc_taxi/raw")
-print(f"Rows: {raw_df.count():,}")
+raw_df = spark.read.schema(YELLOW_SCHEMA).parquet(VOL_RAW)
+print(f"Rows read: {raw_df.count():,}")
 
 # COMMAND ----------
 
@@ -63,7 +63,6 @@ bronze_df = (
     raw_df
     .withColumn("year",  year("tpep_pickup_datetime").cast("int"))
     .withColumn("month", month("tpep_pickup_datetime").cast("int"))
-    # Filter to valid years only — TLC data occasionally has erroneous future dates
     .filter("year BETWEEN 2019 AND 2024")
     .filter("month BETWEEN 1 AND 12")
 )
@@ -74,44 +73,28 @@ bronze_df = (
              .mode("overwrite")
              .partitionBy("year", "month")
              .option("overwriteSchema", "true")
-             .save(BRONZE_PATH)
+             .saveAsTable(BRONZE_TABLE)
 )
 
-print(f"Bronze Delta table written to {BRONZE_PATH}")
-print(f"Partitioned by: (year, month)")
-
-# COMMAND ----------
-
-# Register as SQL table for easy querying
-spark.sql(f"DROP TABLE IF EXISTS {BRONZE_TABLE}")
-spark.sql(f"""
-    CREATE TABLE {BRONZE_TABLE}
-    USING DELTA
-    LOCATION '{BRONZE_PATH}'
-""")
-print(f"Table '{BRONZE_TABLE}' registered.")
+print(f"Bronze table '{BRONZE_TABLE}' written and partitioned by (year, month).")
 
 # COMMAND ----------
 
 # MAGIC %md ## 2.4 — BASELINE BENCHMARK (before optimization)
-# MAGIC
-# MAGIC Run the zone-level aggregation and **record the elapsed time**.
-# MAGIC This is the "before" number for your resume bullet.
 
 # COMMAND ----------
 
 import time
 
-# Clear Spark cache to get a cold-read benchmark
 spark.catalog.clearCache()
 
-query = """
+query = f"""
     SELECT
         PULocationID          AS pickup_zone,
         COUNT(*)              AS trip_count,
         ROUND(SUM(total_amount), 2)  AS total_revenue,
         ROUND(AVG(trip_distance), 3) AS avg_distance
-    FROM nyc_taxi_bronze
+    FROM {BRONZE_TABLE}
     GROUP BY PULocationID
     ORDER BY trip_count DESC
     LIMIT 20
@@ -128,10 +111,4 @@ print("  -> Record this in docs/benchmarks.md")
 
 # COMMAND ----------
 
-# MAGIC %md ## 2.5 — Delta table stats
-
-# COMMAND ----------
-
-spark.sql(f"DESCRIBE DETAIL {BRONZE_TABLE}").select(
-    "numFiles", "sizeInBytes"
-).show(truncate=False)
+spark.sql(f"DESCRIBE DETAIL {BRONZE_TABLE}").select("numFiles", "sizeInBytes").show(truncate=False)

@@ -2,9 +2,23 @@
 # MAGIC %md
 # MAGIC # Step 1 — Ingest NYC TLC Yellow Taxi Parquet Files (2019–2024)
 # MAGIC
-# MAGIC Downloads all Yellow Taxi Parquet files from the NYC TLC S3 bucket into DBFS,
-# MAGIC then reads them into a single Spark DataFrame with an **explicit schema**
-# MAGIC (never inferred — protects against schema drift across years).
+# MAGIC Downloads all Yellow Taxi Parquet files from the NYC TLC S3 bucket into a
+# MAGIC Unity Catalog Volume, then reads them into a single Spark DataFrame with an
+# MAGIC **explicit schema** (never inferred — protects against schema drift across years).
+
+# COMMAND ----------
+
+# MAGIC %md ## 1.0 — One-time setup: create UC schema + volume
+# MAGIC
+# MAGIC Run this cell once. It creates:
+# MAGIC - Schema `main.nyc_taxi`
+# MAGIC - Volume `main.nyc_taxi.nyc_taxi_vol` (managed volume for raw files)
+
+# COMMAND ----------
+
+spark.sql("CREATE SCHEMA IF NOT EXISTS main.nyc_taxi")
+spark.sql("CREATE VOLUME IF NOT EXISTS main.nyc_taxi.nyc_taxi_vol")
+print("Schema and volume ready.")
 
 # COMMAND ----------
 
@@ -12,50 +26,47 @@
 
 # COMMAND ----------
 
-BASE_URL   = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-DBFS_RAW   = "dbfs:/nyc_taxi/raw"
-YEARS      = list(range(2019, 2025))   # 2019 – 2024 inclusive
-MONTHS     = list(range(1, 13))
+BASE_URL  = "https://d37ci6vzurychx.cloudfront.net/trip-data"
+VOL_RAW   = "/Volumes/main/nyc_taxi/nyc_taxi_vol/raw"
+YEARS     = list(range(2019, 2025))   # 2019 – 2024 inclusive
+MONTHS    = list(range(1, 13))
+
+import os
+os.makedirs(VOL_RAW, exist_ok=True)
+print(f"Raw files destination: {VOL_RAW}")
 
 # COMMAND ----------
 
-# MAGIC %md ## 1.2 — Download raw Parquet files to DBFS
+# MAGIC %md ## 1.2 — Download raw Parquet files to Volume
 
 # COMMAND ----------
 
 import subprocess
-import os
-
-dbutils.fs.mkdirs(DBFS_RAW)
 
 for year in YEARS:
     for month in MONTHS:
         filename = f"yellow_tripdata_{year}-{month:02d}.parquet"
-        url      = f"{BASE_URL}/{filename}"
-        dbfs_dst = f"{DBFS_RAW}/{filename}"
+        dst_path = f"{VOL_RAW}/{filename}"
 
         # Skip if already downloaded
-        try:
-            dbutils.fs.ls(dbfs_dst)
-            print(f"  [SKIP] {filename} already exists")
+        if os.path.exists(dst_path):
+            print(f"  [SKIP] {filename}")
             continue
-        except Exception:
-            pass
 
-        # wget to /tmp, then copy to DBFS
-        local_tmp = f"/tmp/{filename}"
+        url = f"{BASE_URL}/{filename}"
         print(f"  [GET ] {url}")
         result = subprocess.run(
-            ["wget", "-q", "-O", local_tmp, url],
+            ["wget", "-q", "-O", dst_path, url],
             capture_output=True, text=True
         )
-        if result.returncode != 0:
-            print(f"  [WARN] {filename} not found (returncode={result.returncode}), skipping")
+        if result.returncode != 0 or os.path.getsize(dst_path) < 1000:
+            print(f"  [WARN] {filename} not found or empty, removing")
+            if os.path.exists(dst_path):
+                os.remove(dst_path)
             continue
 
-        dbutils.fs.cp(f"file:{local_tmp}", dbfs_dst)
-        os.remove(local_tmp)
-        print(f"  [OK  ] {filename} saved to DBFS")
+        size_mb = os.path.getsize(dst_path) / 1_000_000
+        print(f"  [OK  ] {filename} ({size_mb:.1f} MB)")
 
 print("\nAll available files downloaded.")
 
@@ -67,7 +78,7 @@ print("\nAll available files downloaded.")
 
 from pyspark.sql.types import (
     StructType, StructField,
-    IntegerType, LongType, DoubleType, StringType, TimestampType
+    LongType, DoubleType, StringType, TimestampType
 )
 
 YELLOW_SCHEMA = StructType([
@@ -101,7 +112,7 @@ YELLOW_SCHEMA = StructType([
 raw_df = (
     spark.read
          .schema(YELLOW_SCHEMA)
-         .parquet(DBFS_RAW)
+         .parquet(VOL_RAW)
 )
 
 row_count = raw_df.count()
@@ -111,11 +122,11 @@ raw_df.printSchema()
 
 # COMMAND ----------
 
-# MAGIC %md ## 1.5 — Quick sanity checks
+# MAGIC %md ## 1.5 — Quick sanity check by year
 
 # COMMAND ----------
 
-from pyspark.sql.functions import year as spark_year, count, min as spark_min, max as spark_max
+from pyspark.sql.functions import year as spark_year, count
 
 raw_df.groupBy(spark_year("tpep_pickup_datetime").alias("year")) \
       .agg(count("*").alias("row_count")) \
@@ -124,6 +135,5 @@ raw_df.groupBy(spark_year("tpep_pickup_datetime").alias("year")) \
 
 # COMMAND ----------
 
-# Persist for downstream notebooks
 raw_df.createOrReplaceTempView("raw_yellow_taxi")
 print("TempView 'raw_yellow_taxi' registered.")
