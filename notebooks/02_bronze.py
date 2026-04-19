@@ -23,17 +23,49 @@ print(f"CATALOG={CATALOG}  BRONZE_TABLE={BRONZE_TABLE}")
 
 # COMMAND ----------
 
-# TLC changed column types between years (e.g. passenger_count: DOUBLE in 2019,
-# INT64 in 2024). Reading with mergeSchema=True lets Spark resolve to the widest
-# compatible type across all files. Schema is enforced explicitly at the write step.
-raw_df = (
-    spark.read
-         .option("mergeSchema", "true")
-         .parquet(VOL_RAW)
-)
+import os
+from functools import reduce
+from pyspark.sql.functions import col, lit
+
+# TLC changed column types between years (DOUBLE in 2019-2023, BIGINT in 2024+).
+# mergeSchema can't resolve type conflicts, so we read each file individually,
+# cast every column to a fixed target schema, then union all DataFrames.
+TARGET_SCHEMA = {
+    "VendorID":              "long",
+    "tpep_pickup_datetime":  "timestamp",
+    "tpep_dropoff_datetime": "timestamp",
+    "passenger_count":       "double",
+    "trip_distance":         "double",
+    "RatecodeID":            "double",
+    "store_and_fwd_flag":    "string",
+    "PULocationID":          "long",
+    "DOLocationID":          "long",
+    "payment_type":          "long",
+    "fare_amount":           "double",
+    "extra":                 "double",
+    "mta_tax":               "double",
+    "tip_amount":            "double",
+    "tolls_amount":          "double",
+    "improvement_surcharge": "double",
+    "total_amount":          "double",
+    "congestion_surcharge":  "double",
+    "airport_fee":           "double",
+}
+
+files = sorted([f for f in os.listdir(VOL_RAW) if f.endswith(".parquet")])
+print(f"Found {len(files)} parquet files")
+
+dfs = []
+for fname in files:
+    df = spark.read.parquet(f"{VOL_RAW}/{fname}")
+    select_exprs = [
+        col(c).cast(t).alias(c) if c in df.columns else lit(None).cast(t).alias(c)
+        for c, t in TARGET_SCHEMA.items()
+    ]
+    dfs.append(df.select(select_exprs))
+
+raw_df = reduce(lambda a, b: a.union(b), dfs)
 print(f"Rows read: {raw_df.count():,}")
-print("Inferred merged schema:")
-raw_df.printSchema()
 
 # COMMAND ----------
 
