@@ -127,8 +127,5 @@ raw_df.groupBy(spark_year("tpep_pickup_datetime").alias("year")) \
 
 # COMMAND ----------
 
-# Save catalog/vol path for downstream notebooks
-spark.conf.set("nyc_taxi.catalog", CATALOG)
-spark.conf.set("nyc_taxi.vol_base", VOL_BASE)
 raw_df.createOrReplaceTempView("raw_yellow_taxi")
 print(f"Done. CATALOG={CATALOG}  VOL_BASE={VOL_BASE}")
