@@ -23,35 +23,17 @@ print(f"CATALOG={CATALOG}  BRONZE_TABLE={BRONZE_TABLE}")
 
 # COMMAND ----------
 
-from pyspark.sql.types import (
-    StructType, StructField,
-    LongType, DoubleType, StringType, TimestampType
+# TLC changed column types between years (e.g. passenger_count: DOUBLE in 2019,
+# INT64 in 2024). Reading with mergeSchema=True lets Spark resolve to the widest
+# compatible type across all files. Schema is enforced explicitly at the write step.
+raw_df = (
+    spark.read
+         .option("mergeSchema", "true")
+         .parquet(VOL_RAW)
 )
-
-YELLOW_SCHEMA = StructType([
-    StructField("VendorID",                LongType(),      True),
-    StructField("tpep_pickup_datetime",    TimestampType(), True),
-    StructField("tpep_dropoff_datetime",   TimestampType(), True),
-    StructField("passenger_count",         LongType(),      True),  # INT64 in 2024+ files
-    StructField("trip_distance",           DoubleType(),    True),
-    StructField("RatecodeID",              LongType(),      True),  # INT64 in 2024+ files
-    StructField("store_and_fwd_flag",      StringType(),    True),
-    StructField("PULocationID",            LongType(),      True),
-    StructField("DOLocationID",            LongType(),      True),
-    StructField("payment_type",            LongType(),      True),
-    StructField("fare_amount",             DoubleType(),    True),
-    StructField("extra",                   DoubleType(),    True),
-    StructField("mta_tax",                 DoubleType(),    True),
-    StructField("tip_amount",              DoubleType(),    True),
-    StructField("tolls_amount",            DoubleType(),    True),
-    StructField("improvement_surcharge",   DoubleType(),    True),
-    StructField("total_amount",            DoubleType(),    True),
-    StructField("congestion_surcharge",    DoubleType(),    True),
-    StructField("airport_fee",             DoubleType(),    True),
-])
-
-raw_df = spark.read.schema(YELLOW_SCHEMA).parquet(VOL_RAW)
 print(f"Rows read: {raw_df.count():,}")
+print("Inferred merged schema:")
+raw_df.printSchema()
 
 # COMMAND ----------
 

@@ -111,7 +111,7 @@ YELLOW_SCHEMA = StructType([
 
 # COMMAND ----------
 
-raw_df = spark.read.schema(YELLOW_SCHEMA).parquet(VOL_RAW)
+raw_df = spark.read.option("mergeSchema", "true").parquet(VOL_RAW)
 
 row_count = raw_df.count()
 print(f"Total rows ingested : {row_count:,}")
