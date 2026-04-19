@@ -21,7 +21,6 @@ from pyspark.sql.functions import (
 )
 
 silver_df = spark.table(SILVER_TABLE)
-silver_df.cache()
 print(f"Silver rows: {silver_df.count():,}")
 
 # COMMAND ----------

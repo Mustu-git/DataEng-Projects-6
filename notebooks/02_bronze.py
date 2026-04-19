@@ -91,8 +91,6 @@ print(f"Bronze table '{BRONZE_TABLE}' written, partitioned by (year, month).")
 
 import time
 
-spark.catalog.clearCache()
-
 t0 = time.time()
 spark.sql(f"""
     SELECT PULocationID AS pickup_zone,

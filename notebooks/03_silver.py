@@ -162,8 +162,6 @@ print("Z-ORDER applied.")
 
 import time
 
-spark.catalog.clearCache()
-
 t0 = time.time()
 spark.sql(f"""
     SELECT pickup_location_id AS pickup_zone,
