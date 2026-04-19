@@ -85,23 +85,40 @@ print(f"Bronze table '{BRONZE_TABLE}' written, partitioned by (year, month).")
 
 # MAGIC %md ## 2.4 — BASELINE BENCHMARK
 # MAGIC
-# MAGIC Zone-level aggregation with no optimization. Record this time in benchmarks.md.
+# MAGIC Two queries on the unoptimized bronze table:
+# MAGIC 1. Single-zone lookup (WHERE filter) — this is where Z-ORDER has the biggest impact
+# MAGIC 2. Full zone aggregation
+# MAGIC Record both times in docs/benchmarks.md.
 
 # COMMAND ----------
 
 import time
 
+# Query 1: single-zone filter (Z-ORDER will dramatically speed this up later)
+t0 = time.time()
+spark.sql(f"""
+    SELECT COUNT(*) AS trip_count,
+           ROUND(SUM(total_amount), 2) AS total_revenue,
+           ROUND(AVG(trip_distance), 3) AS avg_distance
+    FROM {BRONZE_TABLE}
+    WHERE PULocationID = 237
+""").show()
+t1 = time.time()
+baseline_filter = round(t1 - t0, 2)
+print(f">>> BASELINE single-zone filter: {baseline_filter}s")
+
+# Query 2: full aggregation across all zones
 t0 = time.time()
 spark.sql(f"""
     SELECT PULocationID AS pickup_zone,
            COUNT(*) AS trip_count,
-           ROUND(SUM(total_amount), 2) AS total_revenue,
-           ROUND(AVG(trip_distance), 3) AS avg_distance
+           ROUND(SUM(total_amount), 2) AS total_revenue
     FROM {BRONZE_TABLE}
     GROUP BY PULocationID
     ORDER BY trip_count DESC
     LIMIT 20
 """).show()
 t1 = time.time()
-
-print(f"\n>>> BASELINE query time: {round(t1-t0, 2)}s  — record in docs/benchmarks.md")
+baseline_agg = round(t1 - t0, 2)
+print(f">>> BASELINE full aggregation:   {baseline_agg}s")
+print("\nRecord both in docs/benchmarks.md")

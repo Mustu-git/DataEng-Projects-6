@@ -162,17 +162,32 @@ print("Z-ORDER applied.")
 
 import time
 
+# Query 1: single-zone filter — Z-ORDER on pickup_location_id means Spark skips
+# all files that don't contain zone 237, reading only a small fraction of the data.
+t0 = time.time()
+spark.sql(f"""
+    SELECT COUNT(*) AS trip_count,
+           ROUND(SUM(total_amount), 2) AS total_revenue,
+           ROUND(AVG(trip_distance), 3) AS avg_distance
+    FROM {SILVER_TABLE}
+    WHERE pickup_location_id = 237
+""").show()
+t1 = time.time()
+optimized_filter = round(t1 - t0, 2)
+print(f">>> OPTIMIZED single-zone filter: {optimized_filter}s")
+
+# Query 2: full aggregation
 t0 = time.time()
 spark.sql(f"""
     SELECT pickup_location_id AS pickup_zone,
            COUNT(*) AS trip_count,
-           ROUND(SUM(total_amount), 2) AS total_revenue,
-           ROUND(AVG(trip_distance), 3) AS avg_distance
+           ROUND(SUM(total_amount), 2) AS total_revenue
     FROM {SILVER_TABLE}
     GROUP BY pickup_location_id
     ORDER BY trip_count DESC
     LIMIT 20
 """).show()
 t1 = time.time()
-
-print(f"\n>>> OPTIMIZED query time: {round(t1-t0, 2)}s  — record in docs/benchmarks.md")
+optimized_agg = round(t1 - t0, 2)
+print(f">>> OPTIMIZED full aggregation:   {optimized_agg}s")
+print("\nRecord both in docs/benchmarks.md")
