@@ -32,9 +32,9 @@ YELLOW_SCHEMA = StructType([
     StructField("VendorID",                LongType(),      True),
     StructField("tpep_pickup_datetime",    TimestampType(), True),
     StructField("tpep_dropoff_datetime",   TimestampType(), True),
-    StructField("passenger_count",         DoubleType(),    True),
+    StructField("passenger_count",         LongType(),      True),  # INT64 in 2024+ files
     StructField("trip_distance",           DoubleType(),    True),
-    StructField("RatecodeID",              DoubleType(),    True),
+    StructField("RatecodeID",              LongType(),      True),  # INT64 in 2024+ files
     StructField("store_and_fwd_flag",      StringType(),    True),
     StructField("PULocationID",            LongType(),      True),
     StructField("DOLocationID",            LongType(),      True),
