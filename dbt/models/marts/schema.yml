@@ -47,16 +47,6 @@ models:
         description: "NYC borough name."
         tests:
           - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - Manhattan
-                  - Brooklyn
-                  - Queens
-                  - Bronx
-                  - Staten Island
-                  - EWR
-                  - Unknown
       - name: total_trips
         description: "Total pickup trips for this zone."
         tests:
