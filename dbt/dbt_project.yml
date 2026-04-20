@@ -21,3 +21,4 @@ models:
     marts:
       +materialized: incremental
       +schema: gold
+
