@@ -1,0 +1,69 @@
+# Soda Core checks — Snowflake gold tables
+# Run with: soda scan -d nyc_taxi_snowflake -c soda/configuration.yml soda/checks_snowflake.yml
+
+checks for GOLD_DAILY_TRIPS:
+  # Volume
+  - row_count > 0:
+      name: gold_daily_trips has rows
+  - row_count between 2000 and 5000:
+      name: gold_daily_trips row count is plausible (2K–5K days of data)
+
+  # Freshness / completeness
+  - missing_count(TRIP_DATE) = 0:
+      name: no null trip dates
+  - duplicate_count(TRIP_DATE) = 0:
+      name: trip_date is unique (one row per day)
+
+  # Revenue sanity
+  - min(TOTAL_REVENUE) > 0:
+      name: daily revenue is always positive
+  - max(TOTAL_REVENUE) < 10000000:
+      name: daily revenue is not implausibly large (< $10M/day)
+
+  # Trip counts
+  - min(TOTAL_TRIPS) > 0:
+      name: daily trip count is always positive
+  - missing_count(AVG_FARE) = 0:
+      name: avg_fare is never null
+
+
+checks for GOLD_ZONE_DEMAND:
+  # Volume
+  - row_count between 200 and 300:
+      name: gold_zone_demand row count matches expected zones (265 NYC zones)
+
+  # Keys
+  - missing_count(PICKUP_LOCATION_ID) = 0:
+      name: no null zone IDs
+  - duplicate_count(PICKUP_LOCATION_ID) = 0:
+      name: pickup_location_id is unique
+
+  # Revenue sanity
+  - min(TOTAL_REVENUE) > 0:
+      name: zone revenue is always positive
+  - min(TOTAL_TRIPS) > 0:
+      name: zone trip count is always positive
+  - max(AVG_FARE_PER_MILE) < 100:
+      name: avg fare per mile is not implausibly large
+
+
+checks for GOLD_PEAK_HOURS:
+  # Volume — 24 hours x 2 day types = 48 rows exactly
+  - row_count = 48:
+      name: gold_peak_hours has exactly 48 rows (24 hours x weekday/weekend)
+
+  # Keys
+  - missing_count(PICKUP_HOUR) = 0:
+      name: no null pickup hours
+  - missing_count(DAY_TYPE) = 0:
+      name: no null day types
+
+  # Value ranges
+  - min(PICKUP_HOUR) = 0:
+      name: pickup hours start at 0
+  - max(PICKUP_HOUR) = 23:
+      name: pickup hours end at 23
+  - min(TOTAL_TRIPS) > 0:
+      name: every hour has trips
+  - min(AVG_DURATION_MINS) > 0:
+      name: avg trip duration is always positive

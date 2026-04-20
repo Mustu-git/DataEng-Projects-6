@@ -1,3 +1,4 @@
 dbt-core==1.7.9
 dbt-snowflake==1.7.4
 python-dotenv==1.0.1
+soda-core-snowflake>=3.3.0
