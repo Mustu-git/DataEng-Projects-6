@@ -23,7 +23,8 @@ BRONZE_TABLE  = f"{CATALOG}.nyc_taxi.bronze"
 SILVER_TABLE  = f"{CATALOG}.nyc_taxi.silver"
 GOLD_DAILY    = f"{CATALOG}.nyc_taxi.gold_daily_trips"
 
-SILVER_MIN_PCT = 0.80   # silver must retain at least 80 % of bronze rows
+BRONZE_MIN_PCT = 0.9999  # bronze filters rows with year outside 2019-2024; allow <0.01% drop
+SILVER_MIN_PCT = 0.80    # silver must retain at least 80 % of bronze rows
 print(f"CATALOG={CATALOG}")
 
 # COMMAND ----------
@@ -91,11 +92,12 @@ print(f"Gold daily SUM(total_trips) : {gold_trips_sum:>15,}")
 
 errors = []
 
-# Check 1: source == bronze (exact)
-if source_count != bronze_count:
+# Check 1: source → bronze (near-exact; bronze filters rows with year outside 2019-2024)
+bronze_pct = bronze_count / source_count if source_count > 0 else 0
+if bronze_pct < BRONZE_MIN_PCT:
     errors.append(
-        f"[FAIL] Source→Bronze mismatch: source={source_count:,}  bronze={bronze_count:,}  "
-        f"delta={bronze_count - source_count:+,}"
+        f"[FAIL] Source→Bronze retention {bronze_pct:.4%} is below threshold {BRONZE_MIN_PCT:.2%}  "
+        f"(source={source_count:,}  bronze={bronze_count:,}  dropped={source_count - bronze_count:,})"
     )
 
 # Check 2: silver >= 80 % of bronze
@@ -123,7 +125,7 @@ print("=" * 60)
 print("RECONCILIATION REPORT")
 print("=" * 60)
 print(f"  Source files          : {source_count:>15,}")
-print(f"  Bronze                : {bronze_count:>15,}  {'OK  exact match' if source_count == bronze_count else 'MISMATCH'}")
+print(f"  Bronze                : {bronze_count:>15,}  {bronze_pct:.4%} of source  {'OK' if bronze_pct >= BRONZE_MIN_PCT else 'BELOW THRESHOLD'}  (filtered {source_count - bronze_count:,} out-of-range rows)")
 print(f"  Silver                : {silver_count:>15,}  {silver_pct:.2%} of bronze  {'OK' if silver_pct >= SILVER_MIN_PCT else 'BELOW THRESHOLD'}")
 print(f"  Gold daily trips sum  : {gold_trips_sum:>15,}  {'OK  exact match' if gold_trips_sum == silver_count else 'MISMATCH'}")
 print("-" * 60)
