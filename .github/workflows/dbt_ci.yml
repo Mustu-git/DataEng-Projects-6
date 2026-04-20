@@ -27,33 +27,31 @@ jobs:
       - name: Install dbt-snowflake
         run: pip install dbt-snowflake==1.8.*
 
-      - name: Write profiles.yml
+      - name: Copy profiles.yml to ~/.dbt
         run: |
           mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << EOF
-          nyc_taxi:
-            target: dev
-            outputs:
-              dev:
-                type: snowflake
-                account: ${{ secrets.SF_ACCOUNT }}
-                user: ${{ secrets.SF_USER }}
-                password: ${{ secrets.SF_PASSWORD }}
-                database: NYC_TAXI
-                schema: ANALYTICS_CI
-                warehouse: COMPUTE_WH
-                role: ACCOUNTADMIN
-                threads: 4
-          EOF
+          cp dbt/profiles.yml ~/.dbt/profiles.yml
 
       - name: dbt deps
         working-directory: dbt
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SF_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SF_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SF_PASSWORD }}
         run: dbt deps
 
       - name: dbt run
         working-directory: dbt
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SF_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SF_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SF_PASSWORD }}
         run: dbt run --select staging marts
 
       - name: dbt test
         working-directory: dbt
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SF_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SF_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SF_PASSWORD }}
         run: dbt test
