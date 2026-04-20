@@ -22,9 +22,9 @@
 
 CATALOG = spark.sql("SELECT current_catalog()").collect()[0][0]
 
-SF_ACCOUNT   = "YOUR_ACCOUNT_IDENTIFIER"   # e.g. abc12345.us-east-1
-SF_USER      = "YOUR_USERNAME"
-SF_PASSWORD  = "YOUR_PASSWORD"
+SF_ACCOUNT   = "YXKPEON-ED57880"   # e.g. abc12345.us-east-1
+SF_USER      = "mustafahameed433"
+SF_PASSWORD  = "Sfcforlife1234"
 SF_DATABASE  = "NYC_TAXI"
 SF_SCHEMA    = "GOLD"
 SF_WAREHOUSE = "COMPUTE_WH"
