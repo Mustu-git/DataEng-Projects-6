@@ -55,6 +55,8 @@ conn = snowflake.connector.connect(
     role      = SF_ROLE,
 )
 cursor = conn.cursor()
+cursor.execute("USE DATABASE NYC_TAXI")
+cursor.execute("USE SCHEMA GOLD")
 cursor.execute("SELECT CURRENT_VERSION()")
 print("Connected. Snowflake version:", cursor.fetchone()[0])
 
