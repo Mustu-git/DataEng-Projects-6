@@ -2,8 +2,33 @@
 
 > PySpark · Delta Lake · Databricks · Snowflake · dbt Cloud
 
-Processes ~50GB of NYC TLC Yellow Taxi records (2019–2024) end-to-end:
-ingest → Delta Lake bronze/silver/gold → Snowflake → dbt incremental marts.
+End-to-end data engineering pipeline processing **259 million NYC TLC Yellow Taxi records (2019–2024, ~50 GB)** — ingestion through Databricks, Delta Lake medallion architecture, Snowflake loading, and dbt incremental marts with automated data quality testing.
+
+---
+
+## Architecture
+
+```
+NYC TLC CDN (72 Parquet files, ~50 GB)
+        │
+        ▼
+[ Databricks Serverless ]
+        │
+        ├── 01_ingest    → Unity Catalog Volume (raw Parquet)
+        ├── 02_bronze    → Delta Lake (partitioned by year/month)
+        ├── 03_silver    → Cleaned + enriched (broadcast join, Z-ORDER)
+        ├── 04_gold      → 3 aggregation tables (daily, zone, peak hours)
+        └── 05_snowflake → Snowflake NYC_TAXI.GOLD schema
+                                │
+                        [ dbt Cloud ]
+                                │
+                        ├── staging/     (views over gold tables)
+                        ├── mart_monthly_revenue  (incremental)
+                        └── mart_top_zones        (incremental)
+                                │
+                        15 passing data quality tests
+                        Scheduled nightly production job
+```
 
 ---
 
@@ -11,115 +36,102 @@ ingest → Delta Lake bronze/silver/gold → Snowflake → dbt incremental marts
 
 | Layer | Tool |
 |---|---|
-| Compute | Databricks Community Edition |
-| Storage | Delta Lake (DBFS) |
-| Warehouse | Snowflake (30-day trial) |
-| Modeling | dbt Cloud (free tier) |
-| Orchestration | Databricks Workflows |
+| Compute | Databricks Serverless (Community Edition) |
+| Storage | Delta Lake on Unity Catalog Volumes |
+| Warehouse | Snowflake |
+| Transformation | dbt Cloud (incremental models) |
+| Orchestration | dbt Cloud scheduled job (nightly_run) |
 
 ---
 
-## Project structure
+## Key Engineering Decisions
+
+| Decision | Why |
+|---|---|
+| Per-file read + explicit TARGET_SCHEMA cast | TLC changed column types (DOUBLE→INT64) in 2024 files; `mergeSchema` only handles missing columns, not type conflicts |
+| Partition by `(year, month)` | Eliminates full-table scans on time-range queries |
+| Z-ORDER on `pickup_location_id` | Co-locates zone data in Delta files → file-level skipping on zone filter queries |
+| Broadcast join for zone lookup | 265-row dimension table → broadcasting avoids shuffling the 240M-row fact table across the network |
+| `write_pandas` over Maven Spark connector | Maven libraries unavailable on Databricks Serverless; `snowflake-connector-python` works via `%pip` |
+| Incremental dbt marts | Only new months are processed on rerun → lower Snowflake credit usage |
+
+---
+
+## Results
+
+| Metric | Value |
+|---|---|
+| Raw rows ingested | 259,287,888 |
+| Silver rows (after cleaning) | ~240M |
+| Gold tables | 3 (2,192 + 264 + 48 rows) |
+| dbt models | 5 |
+| dbt tests passing | 15 / 15 |
+
+See [`docs/benchmarks.md`](docs/benchmarks.md) for full benchmark results and resume bullet.
+
+---
+
+## Project Structure
 
 ```
 notebooks/
-  01_ingest.py          Download TLC Parquet files; enforce explicit schema
-  02_bronze.py          Write partitioned Delta bronze; baseline benchmark
-  03_silver.py          Clean, derive features, broadcast join, Z-ORDER; optimized benchmark
-  04_gold.py            Three gold aggregation tables
-  05_load_snowflake.py  Write gold tables to Snowflake via Spark connector
+  01_ingest.py          Download 72 TLC Parquet files to UC Volume; validate row counts
+  02_bronze.py          Per-file read with explicit type casting; partitioned Delta table; baseline benchmark
+  03_silver.py          Clean nulls/outliers; derive trip_duration_mins, fare_per_mile, is_weekend;
+                        broadcast join with zone lookup; Z-ORDER; optimized benchmark
+  04_gold.py            gold_daily_trips, gold_zone_demand, gold_peak_hours
+  05_load_snowflake.py  Load gold tables to Snowflake via snowflake-connector-python
 
 dbt/
-  models/staging/       Views over raw Snowflake gold tables
-  models/marts/         Incremental marts (mart_monthly_revenue, mart_top_zones)
-  tests/                Custom singular tests
+  models/staging/       stg_daily_trips, stg_zone_demand, stg_peak_hours (views)
+  models/marts/         mart_monthly_revenue (incremental), mart_top_zones (incremental)
+  tests/                assert_no_negative_revenue, assert_daily_trips_positive
   dbt_project.yml
-  profiles.yml          Reference only — configure connection in dbt Cloud UI
-
-workflow/
-  nyc_taxi_workflow.json  Databricks Workflow: chains all 6 steps
+  profiles.yml
 
 docs/
-  benchmarks.md         Record query times + dbt test results here
+  benchmarks.md         Query benchmark results and resume bullet
 ```
 
 ---
 
-## Quickstart
+## Setup
 
-### 1. Accounts
+### Prerequisites
 
-Create these free accounts before starting:
+- [Databricks Community Edition](https://community.cloud.databricks.com)
+- [Snowflake](https://signup.snowflake.com) (30-day free trial)
+- [dbt Cloud](https://cloud.getdbt.com) (free developer tier)
 
-- **Databricks Community Edition**: https://community.cloud.databricks.com
-- **Snowflake 30-day trial**: https://signup.snowflake.com
-- **dbt Cloud free tier**: https://cloud.getdbt.com
+### 1. Snowflake — create database
 
-### 2. Databricks setup
-
-1. Create a cluster (Runtime 13.3 LTS, single-node is fine for CE)
-2. Install Maven libraries on the cluster:
-   - `net.snowflake:spark-snowflake_2.12:2.12.0-spark_3.3`
-   - `net.snowflake:snowflake-jdbc:3.13.30`
-3. Clone this repo into your Databricks Workspace via Repos
-4. Create a Databricks Secret scope for Snowflake credentials:
-   ```bash
-   databricks secrets create-scope --scope nyc_taxi_scope
-   databricks secrets put --scope nyc_taxi_scope --key sf_account
-   databricks secrets put --scope nyc_taxi_scope --key sf_user
-   databricks secrets put --scope nyc_taxi_scope --key sf_password
-   ```
-
-### 3. Run notebooks in order
-
-```
-01_ingest → 02_bronze → 03_silver → 04_gold → 05_load_snowflake
-```
-
-Record benchmark times from notebooks 02 and 03 in `docs/benchmarks.md`.
-
-### 4. Snowflake — create database
-
-Run this in a Snowflake worksheet before notebook 05:
+Run in a Snowflake worksheet before notebook 05:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS NYC_TAXI;
 CREATE SCHEMA  IF NOT EXISTS NYC_TAXI.GOLD;
 CREATE SCHEMA  IF NOT EXISTS NYC_TAXI.STAGING;
+CREATE SCHEMA  IF NOT EXISTS NYC_TAXI.ANALYTICS;
 ```
 
-### 5. dbt Cloud setup
+### 2. Databricks — run notebooks in order
 
-1. Connect dbt Cloud to Snowflake (Project Settings → Connection)
-2. Point the repository to this repo → `dbt/` subfolder
-3. Run:
+1. Clone this repo into Databricks via Repos (Workspace → Repos → Add Repo)
+2. Open each notebook and click **Run All** in order:
+
+```
+01_ingest → 02_bronze → 03_silver → 04_gold → 05_load_snowflake
+```
+
+In `05_load_snowflake.py`, fill in your Snowflake credentials in section 5.1 before running.
+
+### 3. dbt Cloud
+
+1. Create a new project, connect to Snowflake, set subdirectory to `dbt/`
+2. Connect your GitHub repo
+3. Run in the IDE:
    ```
-   dbt deps
    dbt run --select staging marts
    dbt test
    ```
-
-### 6. Databricks Workflow
-
-Import `workflow/nyc_taxi_workflow.json` into Databricks Workflows:
-
-- Workflows → Create Job → ... → Import from JSON
-- Replace `<your-username>` in notebook paths with your Databricks username
-
----
-
-## Benchmarks
-
-See `docs/benchmarks.md` — fill in after running.
-
----
-
-## Key design decisions
-
-| Decision | Why |
-|---|---|
-| Explicit schema (no `inferSchema`) | Prevents silent type changes across TLC schema versions |
-| Partition by `(year, month)` | Eliminates full-table scans for time-range queries |
-| Z-ORDER on `pickup_location_id` | Co-locates zone data in files → data skipping for zone queries |
-| Broadcast join for zone lookup | 265-row table — broadcasting avoids shuffling the billion-row fact table |
-| Incremental dbt marts | Only new months processed on rerun → lower Snowflake credit usage |
+4. Create a **Production** environment and **nightly_run** deploy job (scheduled daily)
