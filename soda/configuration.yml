@@ -1,16 +1,9 @@
-data_sources:
-  nyc_taxi_snowflake:
-    type: snowflake
-    username: ${SF_USER}
-    password: ${SF_PASSWORD}
-    account: ${SF_ACCOUNT}
-    database: NYC_TAXI
-    schema: GOLD
-    warehouse: COMPUTE_WH
-    role: ACCOUNTADMIN
-
-soda_cloud:
-  # Optional: connect to Soda Cloud for alerting history
-  # host: cloud.soda.io
-  # api_key_id: ${SODA_API_KEY_ID}
-  # api_key_secret: ${SODA_API_KEY_SECRET}
+data_source nyc_taxi_snowflake:
+  type: snowflake
+  username: ${SF_USER}
+  password: ${SF_PASSWORD}
+  account: ${SF_ACCOUNT}
+  database: NYC_TAXI
+  schema: GOLD
+  warehouse: COMPUTE_WH
+  role: ACCOUNTADMIN
