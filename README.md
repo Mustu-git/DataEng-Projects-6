@@ -6,6 +6,14 @@ End-to-end data engineering pipeline processing **259 million NYC TLC Yellow Tax
 
 ---
 
+## Lineage Graph (Unity Catalog)
+
+![Unity Catalog Lineage](docs/lineage.png)
+
+*Automatically tracked by Unity Catalog: UC Volume + Bronze → Silver → 3 Gold tables*
+
+---
+
 ## Architecture
 
 ```
