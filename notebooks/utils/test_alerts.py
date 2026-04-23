@@ -7,7 +7,9 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("SLACK_WEBHOOK_URL", "", "Slack Webhook URL")
+# Paste your webhook URL here to test — do NOT commit this file with a real URL
+import os
+os.environ["SLACK_WEBHOOK_URL"] = "YOUR_WEBHOOK_URL_HERE"
 
 # COMMAND ----------
 

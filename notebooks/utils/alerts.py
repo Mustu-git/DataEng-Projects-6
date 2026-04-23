@@ -22,13 +22,11 @@ _WEBHOOK_URL = None  # set this only for local testing, never commit a real URL
 def _get_webhook_url():
     if _WEBHOOK_URL:
         return _WEBHOOK_URL
-    # Try Databricks widget first (set via dbutils.widgets.text in calling notebook)
-    try:
-        url = dbutils.widgets.get("SLACK_WEBHOOK_URL")
-        if url:
-            return url
-    except Exception:
-        pass
+    # Try environment variable (set in test notebook or cluster env vars)
+    import os
+    url = os.environ.get("SLACK_WEBHOOK_URL")
+    if url:
+        return url
     # Fall back to Databricks secret scope
     try:
         return dbutils.secrets.get(scope="nyc_taxi_scope", key="slack_webhook_url")
