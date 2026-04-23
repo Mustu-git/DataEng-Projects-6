@@ -13,16 +13,23 @@ import requests
 import traceback
 from contextlib import contextmanager
 
-# Store the webhook URL in a Databricks secret scope:
-#   databricks secrets create-scope --scope nyc_taxi_scope
-#   databricks secrets put --scope nyc_taxi_scope --key slack_webhook_url
-#
-# Or set it directly here for testing (do NOT commit a real URL):
-_WEBHOOK_URL = None
+# Webhook URL resolution order:
+#   1. SLACK_WEBHOOK_URL Databricks widget (set at top of any notebook that uses alerts)
+#   2. Databricks secret scope (nyc_taxi_scope / slack_webhook_url)
+#   3. _WEBHOOK_URL variable below (for quick local testing only — do NOT commit a real URL)
+_WEBHOOK_URL = None  # set this only for local testing, never commit a real URL
 
 def _get_webhook_url():
     if _WEBHOOK_URL:
         return _WEBHOOK_URL
+    # Try Databricks widget first (set via dbutils.widgets.text in calling notebook)
+    try:
+        url = dbutils.widgets.get("SLACK_WEBHOOK_URL")
+        if url:
+            return url
+    except Exception:
+        pass
+    # Fall back to Databricks secret scope
     try:
         return dbutils.secrets.get(scope="nyc_taxi_scope", key="slack_webhook_url")
     except Exception:
