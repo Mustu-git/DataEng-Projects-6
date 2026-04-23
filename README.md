@@ -1,8 +1,8 @@
 # Project 6 — NYC Taxi Analytics at Scale
 
-> PySpark · Delta Lake · Databricks · Snowflake · dbt Cloud
+> PySpark · Delta Lake · Databricks · Snowflake · dbt Cloud · Soda Core · GitHub Actions
 
-End-to-end data engineering pipeline processing **259 million NYC TLC Yellow Taxi records (2019–2024, ~50 GB)** — ingestion through Databricks, Delta Lake medallion architecture, Snowflake loading, and dbt incremental marts with automated data quality testing.
+End-to-end data engineering pipeline processing **259 million NYC TLC Yellow Taxi records (2019–2024, ~50 GB)** — ingestion through Databricks, Delta Lake medallion architecture, Snowflake loading, dbt incremental marts, automated data quality testing, CI/CD, and Slack alerting.
 
 ---
 
@@ -49,6 +49,10 @@ NYC TLC CDN (72 Parquet files, ~50 GB)
 | Warehouse | Snowflake |
 | Transformation | dbt Cloud (incremental models) |
 | Orchestration | dbt Cloud scheduled job (nightly_run) |
+| Data Quality | dbt tests (15) + Soda Core (21 checks on Snowflake gold) |
+| CI/CD | GitHub Actions — dbt run + test on every push to `dbt/` |
+| Alerting | Slack webhook via `pipeline_step()` context manager |
+| Lineage | Unity Catalog automatic lineage tracking |
 
 ---
 
@@ -70,10 +74,15 @@ NYC TLC CDN (72 Parquet files, ~50 GB)
 | Metric | Value |
 |---|---|
 | Raw rows ingested | 259,287,888 |
-| Silver rows (after cleaning) | ~240M |
+| Silver rows (after cleaning) | 239,592,833 (92.4% of bronze) |
 | Gold tables | 3 (2,192 + 264 + 48 rows) |
 | dbt models | 5 |
 | dbt tests passing | 15 / 15 |
+| Soda Core checks passing | 21 / 21 |
+| Reconciliation checks | 3 / 3 (source→bronze→silver→gold) |
+| CI/CD | GitHub Actions — dbt run + test on every push |
+| Alerting | Slack webhook on pipeline failure |
+| Lineage | Unity Catalog automatic lineage tracking |
 
 See [`docs/benchmarks.md`](docs/benchmarks.md) for full benchmark results and resume bullet.
 
